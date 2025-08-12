@@ -1,5 +1,6 @@
 const { AzureOpenAI } = require("openai");
 const { CosmosClient } = require("@azure/cosmos");
+const VoiceManager = require("../shared/voiceManager");
 
 // Initialize Azure OpenAI with defensive error handling
 let openai = null;
@@ -25,6 +26,9 @@ let isDbConnected = false;
 
 // Store conversation sessions (fallback)
 const conversationSessions = new Map();
+
+// Initialize Voice Manager for Azure Speech Services
+const voiceManager = new VoiceManager();
 
 // Initialize Cosmos DB SQL API connection with enhanced error handling
 const initializeCosmosDB = async (context) => {
@@ -340,7 +344,8 @@ const getAIResponse = async (messages) => {
 };
 
 module.exports = async function (context, req) {
-  context.log("VOICE-STREAM FUNCTION CALLED!");
+  context.log("🎙️ VOICE-STREAM FUNCTION CALLED WITH ALLOY TURBO!");
+  context.log("🔍 Voice-stream debug - VoiceManager exists:", !!voiceManager);
   
   // Early validation of critical dependencies
   if (!process.env.OPENAI_ENDPOINT || !process.env.OPENAI_KEY) {
@@ -373,21 +378,22 @@ module.exports = async function (context, req) {
       context.log("Speech Result:", speechResult);
       context.log("Confidence:", confidence);
       
-      // Filter low-confidence results
+      // Filter low-confidence results with enhanced voice response
       if (confidence < 0.3 && speechResult && speechResult.trim().length < 3) {
-        const clarificationTwiml = `
-          <Response>
-            <Say voice="en-US-JennyNeural">Sorry, didn't catch that. What can I help you with?</Say>
-            <Gather input="speech" timeout="30" speechTimeout="auto" action="https://func-blucallerai-dkavgbhvdkesgmer.westus-01.azurewebsites.net/api/voice-stream" method="POST">
-              <Say voice="en-US-JennyNeural">I'm listening.</Say>
-            </Gather>
-            <Redirect>https://func-blucallerai-dkavgbhvdkesgmer.westus-01.azurewebsites.net/api/voice-twiml</Redirect>
-          </Response>
-        `.trim();
+        context.log(`⚠️ Low confidence (${confidence}), requesting clarification with enhanced voice`);
+        
+        const clarificationResponse = await voiceManager.generateVoiceResponse(
+          "Sorry, I didn't catch that clearly. Could you please repeat what you said?",
+          { 
+            emotion: 'helpful',
+            urgencyLevel: 'normal',
+            followUpPrompt: "I'm listening..."
+          }
+        );
         
         context.res = {
           headers: { "Content-Type": "text/xml" },
-          body: clarificationTwiml
+          body: clarificationResponse
         };
         return;
       }
@@ -430,24 +436,18 @@ module.exports = async function (context, req) {
         saveMessage(callSid, phoneNumber, 'assistant', aiResponse, context);
         updateLead(phoneNumber, session.leadInfo, callSid, context);
         
-        // Determine follow-up
-        let followUpPrompt = "Anything else I can help with?";
-        if (session.leadInfo.hasEmergency) {
-          followUpPrompt = "Can I get your address to send someone out?";
-        } else if (session.leadInfo.serviceType && !session.leadInfo.contactInfo.name) {
-          followUpPrompt = "What's your name for our records?";
-        }
+        // Analyze conversation context for voice characteristics
+        const voiceContext = voiceManager.analyzeConversationContext(session);
         
-        // Return TwiML response
-        const responseTwiml = `
-          <Response>
-            <Say voice="en-US-JennyNeural">${aiResponse}</Say>
-            <Gather input="speech" timeout="30" speechTimeout="auto" action="https://func-blucallerai-dkavgbhvdkesgmer.westus-01.azurewebsites.net/api/voice-stream" method="POST">
-              <Say voice="en-US-JennyNeural">${followUpPrompt}</Say>
-            </Gather>
-            <Redirect>https://func-blucallerai-dkavgbhvdkesgmer.westus-01.azurewebsites.net/api/voice-twiml</Redirect>
-          </Response>
-        `.trim();
+        // Generate contextual follow-up prompt
+        const followUpPrompt = voiceManager.generateContextualFollowUp(session);
+        
+        // Generate enhanced voice response with context awareness
+        const responseTwiml = await voiceManager.generateVoiceResponse(aiResponse, {
+          ...voiceContext,
+          customerName: session.leadInfo?.contactInfo?.name,
+          followUpPrompt: followUpPrompt
+        });
         
         context.res = {
           headers: { "Content-Type": "text/xml" },
@@ -455,20 +455,21 @@ module.exports = async function (context, req) {
         };
         return;
       } else {
-        // No speech detected
-        const noSpeechTwiml = `
-          <Response>
-            <Say voice="en-US-JennyNeural">Didn't hear you. How can I help?</Say>
-            <Gather input="speech" timeout="30" speechTimeout="auto" action="https://func-blucallerai-dkavgbhvdkesgmer.westus-01.azurewebsites.net/api/voice-stream" method="POST">
-              <Say voice="en-US-JennyNeural">I'm listening.</Say>
-            </Gather>
-            <Redirect>https://func-blucallerai-dkavgbhvdkesgmer.westus-01.azurewebsites.net/api/voice-twiml</Redirect>
-          </Response>
-        `.trim();
+        // No speech detected - use enhanced voice response
+        context.log("🔇 No speech detected, using enhanced voice response");
+        
+        const noSpeechResponse = await voiceManager.generateVoiceResponse(
+          "I didn't hear anything. What can I help you with today?",
+          { 
+            emotion: 'patient',
+            urgencyLevel: 'normal',
+            followUpPrompt: "I'm listening..."
+          }
+        );
         
         context.res = {
           headers: { "Content-Type": "text/xml" },
-          body: noSpeechTwiml
+          body: noSpeechResponse
         };
       }
     } else {
@@ -479,21 +480,18 @@ module.exports = async function (context, req) {
       };
     }
   } catch (error) {
-    context.log.error("Function error:", error.message);
+    context.log.error("❌ Function error:", error.message);
     context.log.error("Stack trace:", error.stack);
     
-    // Error TwiML
-    const errorTwiml = `
-      <Response>
-        <Say voice="en-US-JennyNeural">Sorry, I had an error. Please try calling again.</Say>
-        <Hangup />
-      </Response>
-    `.trim();
+    // Create enhanced error response
+    const errorResponse = voiceManager.createErrorResponse(
+      "I'm sorry, I'm having technical difficulties. Please try calling back in a moment."
+    );
     
     context.res = { 
       status: 200,
       headers: { "Content-Type": "text/xml" },
-      body: errorTwiml
+      body: errorResponse
     };
   }
 };

@@ -1,46 +1,46 @@
-// E:\voice-agent\voice-twiml\index.js
+const VoiceManager = require('../shared/voiceManager');
 
-module.exports = async function (context) {
-  context.log("TwiML function called, generating speech recognition TwiML");
+const voiceManager = new VoiceManager();
 
-  try {
-    // Return TwiML that uses Twilio's speech recognition instead of streaming
-    const twiml = `
-      <Response>
-        <Say voice="en-US-JennyNeural">
-          Hi, this is Blue Caller HVAC. How can I help you today?
-        </Say>
-        <Gather input="speech" timeout="30" speechTimeout="auto" action="https://func-blucallerai-dkavgbhvdkesgmer.westus-01.azurewebsites.net/api/voice-stream" method="POST">
-          <Say voice="en-US-JennyNeural">
-            I'm listening.
-          </Say>
-        </Gather>
-        <Redirect>https://func-blucallerai-dkavgbhvdkesgmer.westus-01.azurewebsites.net/api/voice-twiml</Redirect>
-      </Response>
-    `.trim();
+module.exports = async function (context, req) {
+    context.log("🎬 Enhanced TwiML with Azure Speech Services (Alloy Turbo)");
 
-    context.log("Generated TwiML with speech recognition:", twiml);
+    try {
+        // Check if this is a returning customer based on From parameter
+        const callerNumber = req.query.From || req.body?.From;
+        let isReturningCustomer = false;
+        let customerName = null;
 
-    context.res = {
-      headers: { "Content-Type": "text/xml" },
-      body: twiml
-    };
-  } catch (error) {
-    context.log.error("Error generating TwiML:", error.message);
+        // TODO: In future, we could check database for returning customer info
+        // For now, always treat as new customer with professional greeting
+        
+        const greeting = "Hello! Thank you for calling Blue Caller HVAC. I'm Sarah, your AI assistant. How can I help you today?";
+        
+        const voiceResponse = await voiceManager.generateVoiceResponse(greeting, {
+            emotion: 'friendly',
+            urgencyLevel: 'normal',
+            followUpPrompt: "I'm listening..."
+        });
 
-    // Fallback TwiML
-    const fallbackTwiml = `
-      <Response>
-        <Say voice="en-US-JennyNeural">
-          I'm having trouble right now. Please try again later.
-        </Say>
-      </Response>
-    `.trim();
+        context.log("✅ Generated enhanced greeting with Alloy Turbo voice");
 
-    context.res = {
-      status: 200,
-      headers: { "Content-Type": "text/xml" },
-      body: fallbackTwiml
-    };
-  }
+        context.res = {
+            headers: { "Content-Type": "text/xml" },
+            body: voiceResponse
+        };
+        
+    } catch (error) {
+        context.log.error("❌ Error generating enhanced TwiML:", error);
+        
+        // Create error response using voice manager
+        const errorResponse = voiceManager.createErrorResponse(
+            "Thank you for calling Blue Caller HVAC. I'm having some technical difficulties right now. Please try calling back in just a moment."
+        );
+        
+        context.res = {
+            status: 200,
+            headers: { "Content-Type": "text/xml" },
+            body: errorResponse
+        };
+    }
 };
