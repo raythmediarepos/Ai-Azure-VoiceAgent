@@ -13,7 +13,7 @@ class VoiceManager {
     }
 
     async generateVoiceResponse(text, context = {}) {
-                console.log(`🎙️ Generating JENNY NEURAL voice response for: "${text.substring(0, 50)}..."`);
+                console.log(`🎙️ Generating AVA MULTILINGUAL voice response for: "${text.substring(0, 50)}..."`);
 
         const {
             isEmergency = false,
@@ -24,8 +24,8 @@ class VoiceManager {
         } = context;
 
         try {
-            // ONLY use Azure Speech Services with Jenny Neural - NO FALLBACKS
-            console.log('🎤 Synthesizing with Azure Jenny Neural (All-or-Nothing mode)');
+            // ONLY use Azure Speech Services with Ava Multilingual - NO FALLBACKS
+            console.log('🎤 Synthesizing with Azure Ava Multilingual (All-or-Nothing mode)');
             
             const azureResult = await this.azureSpeech.synthesizeSpeech(text, {
                 isEmergency,
@@ -35,7 +35,7 @@ class VoiceManager {
             });
 
             if (azureResult.success) {
-                console.log('✅ Azure Jenny Neural synthesis successful');
+                console.log('✅ Azure Ava Multilingual synthesis successful');
                 
                 // Upload main audio to blob storage and get URL
                 const audioUrl = await this.azureSpeech.cacheAudio(text, azureResult.audioData);
@@ -63,8 +63,8 @@ class VoiceManager {
     createAlloyTurboTwiML(audioUrl, followUpUrl, context = {}) {
         const { isEmergency = false } = context;
         
-        // Use the actual Azure Jenny Neural audio URLs from blob storage
-        console.log('🎵 Creating TwiML with Jenny Neural audio URLs');
+        // Use the actual Azure Ava Multilingual audio URLs from blob storage
+        console.log('🎵 Creating TwiML with Ava Multilingual audio URLs');
         console.log('Main audio:', audioUrl.substring(0, 50) + '...');
         if (followUpUrl) console.log('Follow-up audio:', followUpUrl.substring(0, 50) + '...');
         

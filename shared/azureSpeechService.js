@@ -21,12 +21,12 @@ class AzureSpeechService {
                 process.env.SPEECH_REGION
             );
 
-            // TRY ENHANCED VOICES: These should work in your current westus region
-            // Start with Jenny - Microsoft's most conversational female voice
-            this.speechConfig.speechSynthesisVoiceName = 'en-US-JennyNeural';
+            // AVA MULTILINGUAL: Bright, engaging female voice from Speech Playground
+            // Perfect for customer service with beautiful tone and multilingual capabilities
+            this.speechConfig.speechSynthesisVoiceName = 'en-US-AvaMultilingualNeural';
             
-            // Configure optimized audio output for better Twilio streaming
-            this.speechConfig.speechSynthesisOutputFormat = sdk.SpeechSynthesisOutputFormat.Audio24Khz96KBitRateMonoMp3;
+            // Configure HIGH-QUALITY audio output matching Speech Playground quality
+            this.speechConfig.speechSynthesisOutputFormat = sdk.SpeechSynthesisOutputFormat.Audio24Khz160KBitRateMonoMp3;
 
             // Debug environment variables
             console.log('🔍 Environment Variables Debug:');
@@ -52,7 +52,7 @@ class AzureSpeechService {
                 console.log('All env vars:', Object.keys(process.env).filter(k => k.includes('STORAGE')));
             }
 
-            console.log('✅ Azure Speech Service initialized with Jenny Neural voice (conversational)');
+            console.log('✅ Azure Speech Service initialized with Ava Multilingual voice');
         } catch (error) {
             console.error('❌ Failed to initialize Azure Speech Service:', error);
         }
@@ -65,7 +65,7 @@ class AzureSpeechService {
                 return { success: false, error: 'Speech service not initialized' };
             }
 
-            console.log(`🎤 Synthesizing speech with Jenny Neural: "${text.substring(0, 50)}..."`);
+            console.log(`🎤 Synthesizing speech with Ava Multilingual: "${text.substring(0, 50)}..."`);
 
             // Create enhanced SSML for natural speech
             const ssml = this.createSSML(text, options);
@@ -142,13 +142,13 @@ class AzureSpeechService {
         // Clean text for SSML and add natural pauses
         const cleanText = this.cleanTextForSSML(text);
 
-        // Create optimized SSML for AriaNeural - smooth, natural conversation
+        // Create HD SSML optimized for Ava Multilingual - matching Speech Playground quality
         const ssml = `
             <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" 
                    xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="en-US">
-                <voice name="en-US-JennyNeural">
-                    <mstts:express-as style="friendly" styledegree="1.0">
-                        <prosody rate="medium" pitch="default">
+                <voice name="en-US-AvaMultilingualNeural">
+                    <mstts:express-as style="pleasant" styledegree="1.0">
+                        <prosody rate="0.95" pitch="+2%">
                             ${cleanText}
                         </prosody>
                     </mstts:express-as>
@@ -204,10 +204,10 @@ class AzureSpeechService {
         }
 
         try {
-            const containerName = 'jenny-neural-audio';
-            const textHash = require('crypto').createHash('md5').update(`jenny-2025-${text}-${Date.now()}`).digest('hex');
+            const containerName = 'ava-multilingual-audio';
+            const textHash = require('crypto').createHash('md5').update(`ava-2025-${text}`).digest('hex');
             const timestamp = Date.now();
-            const blobName = `jenny-neural-${textHash}-${timestamp}.mp3`;
+            const blobName = `ava-${textHash}-${timestamp}.mp3`;
             
             const containerClient = this.blobService.getContainerClient(containerName);
             
@@ -221,12 +221,15 @@ class AzureSpeechService {
                             await blockBlobClient.upload(audioBuffer, audioBuffer.length, {
                     blobHTTPHeaders: {
                         blobContentType: 'audio/mpeg',
-                        blobCacheControl: 'public, max-age=86400', // Cache for 24 hours
-                        blobContentEncoding: 'identity' // Ensure no compression
-                    }
+                        blobCacheControl: 'public, max-age=604800', // Cache for 7 days
+                        blobContentEncoding: 'identity', // Ensure no compression
+                        blobContentDisposition: 'inline' // Enable streaming playback
+                    },
+                    blockSize: 4 * 1024 * 1024, // 4MB blocks for faster upload
+                    concurrency: 10 // Parallel upload streams
                 });
 
-            console.log(`✅ Jenny Neural audio cached successfully: ${blobName}`);
+            console.log(`✅ Ava Multilingual audio cached successfully: ${blobName}`);
             console.log(`🔗 Public URL: ${blockBlobClient.url}`);
             return blockBlobClient.url;
         } catch (error) {
