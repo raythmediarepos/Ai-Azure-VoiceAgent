@@ -25,8 +25,8 @@ class AzureSpeechService {
             // Perfect for customer service with beautiful tone and multilingual capabilities
             this.speechConfig.speechSynthesisVoiceName = 'en-US-AvaMultilingualNeural';
             
-            // Configure HIGH-QUALITY audio output matching Speech Playground quality
-            this.speechConfig.speechSynthesisOutputFormat = sdk.SpeechSynthesisOutputFormat.Audio24Khz160KBitRateMonoMp3;
+            // Configure FASTEST audio output - lower quality for speed
+            this.speechConfig.speechSynthesisOutputFormat = sdk.SpeechSynthesisOutputFormat.Audio16Khz32KBitRateMonoMp3;
 
             // Debug environment variables
             console.log('🔍 Environment Variables Debug:');
@@ -142,16 +142,14 @@ class AzureSpeechService {
         // Clean text for SSML and add natural pauses
         const cleanText = this.cleanTextForSSML(text);
 
-        // Create HD SSML optimized for Ava Multilingual - matching Speech Playground quality
+        // Create ULTRA-FAST SSML for Ava Multilingual - speed over style
         const ssml = `
             <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" 
                    xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="en-US">
                 <voice name="en-US-AvaMultilingualNeural">
-                    <mstts:express-as style="pleasant" styledegree="1.0">
-                        <prosody rate="0.95" pitch="+2%">
-                            ${cleanText}
-                        </prosody>
-                    </mstts:express-as>
+                    <prosody rate="1.3" pitch="default">
+                        ${cleanText}
+                    </prosody>
                 </voice>
             </speak>
         `.trim();
@@ -161,18 +159,38 @@ class AzureSpeechService {
 
     cleanTextForSSML(text) {
         return text
-            // Escape XML special characters
+            // Fix contractions FIRST before escaping
+            .replace(/you're/gi, 'you are')
+            .replace(/we're/gi, 'we are') 
+            .replace(/they're/gi, 'they are')
+            .replace(/I'm/gi, 'I am')
+            .replace(/can't/gi, 'cannot')
+            .replace(/won't/gi, 'will not')
+            .replace(/don't/gi, 'do not')
+            .replace(/didn't/gi, 'did not')
+            .replace(/isn't/gi, 'is not')
+            .replace(/aren't/gi, 'are not')
+            .replace(/wasn't/gi, 'was not')
+            .replace(/weren't/gi, 'were not')
+            .replace(/it's/gi, 'it is')
+            .replace(/that's/gi, 'that is')
+            .replace(/what's/gi, 'what is')
+            .replace(/here's/gi, 'here is')
+            .replace(/there's/gi, 'there is')
+            // Then escape XML special characters  
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
-            .replace(/'/g, '&apos;')
-            // Add natural pauses for more conversational flow
-            .replace(/\./g, '.<break time="400ms"/>')
-            .replace(/\?/g, '?<break time="500ms"/>')
-            .replace(/!/g, '!<break time="400ms"/>')
-            .replace(/,/g, ',<break time="250ms"/>')
-            .replace(/;/g, ';<break time="300ms"/>');
+            // Fix name stuttering - remove pauses after names
+            .replace(/\bHi\s+([A-Z][a-z]+)!\s*/g, 'Hi $1! ')
+            .replace(/\bHello\s+([A-Z][a-z]+)!\s*/g, 'Hello $1! ')
+            // ULTRA-MINIMAL pauses for maximum speed
+            .replace(/\./g, '.<break time="50ms"/>')
+            .replace(/\?/g, '?<break time="75ms"/>')
+            .replace(/!/g, '!<break time="50ms"/>')
+            .replace(/,/g, ',<break time="25ms"/>')
+            .replace(/;/g, ';<break time="30ms"/>');
     }
 
     async cacheAudio(text, audioBase64) {
@@ -225,8 +243,8 @@ class AzureSpeechService {
                         blobContentEncoding: 'identity', // Ensure no compression
                         blobContentDisposition: 'inline' // Enable streaming playback
                     },
-                    blockSize: 4 * 1024 * 1024, // 4MB blocks for faster upload
-                    concurrency: 10 // Parallel upload streams
+                    blockSize: 1 * 1024 * 1024, // 1MB blocks for faster small files
+                    concurrency: 20 // More parallel streams for speed
                 });
 
             console.log(`✅ Ava Multilingual audio cached successfully: ${blobName}`);

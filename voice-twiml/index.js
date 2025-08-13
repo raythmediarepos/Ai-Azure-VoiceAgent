@@ -1,28 +1,47 @@
 const VoiceManager = require('../shared/voiceManager');
+const BusinessService = require('../shared/businessService');
 
 const voiceManager = new VoiceManager();
+const businessService = new BusinessService();
 
 module.exports = async function (context, req) {
-    context.log("🎬 Enhanced TwiML with Azure Speech Services (Alloy Turbo)");
+    context.log("🎬 Multi-Tenant TwiML with Business-Specific Greetings");
 
     try {
-        // Check if this is a returning customer based on From parameter
-        const callerNumber = req.query.From || req.body?.From;
-        let isReturningCustomer = false;
-        let customerName = null;
+        // Extract Twilio webhook data (prioritize POST body over query params)
+        const callerNumber = req.body?.From || req.query.From;
+        const twilioPhoneNumber = req.body?.To || req.query.To; // The business phone number called
+        
+        context.log(`📞 Call from ${callerNumber} to business number ${twilioPhoneNumber}`);
 
-        // TODO: In future, we could check database for returning customer info
-        // For now, always treat as new customer with professional greeting
+        // 🔥 NEW: Multi-tenant business lookup
+        const businessContext = await businessService.getBusinessContext(null, twilioPhoneNumber);
         
-        const greeting = "Thank you for calling Blue Caller HVAC. How may I assist you today?";
+        context.log(`🏢 Business identified: ${businessContext.companyName} (${businessContext.industry}) - Found: ${businessContext.found}`);
         
-        const voiceResponse = await voiceManager.generateVoiceResponse(greeting, {
+        // 🔥 NEW: Generate business-specific greeting
+        const greeting = businessService.generateGreeting(businessContext);
+        
+        // 🔥 NEW: Check business hours
+        const hoursAnalysis = businessService.analyzeBusinessHours(businessContext);
+        let finalGreeting = greeting;
+        
+        if (!hoursAnalysis.isOpen && hoursAnalysis.message) {
+            finalGreeting = `${greeting} ${hoursAnalysis.message}`;
+            context.log(`⏰ After hours message added for ${businessContext.companyName}`);
+        }
+
+        // Generate voice response with business context
+        const voiceResponse = await voiceManager.generateVoiceResponse(finalGreeting, {
             emotion: 'friendly',
             urgencyLevel: 'normal',
+            businessId: businessContext.businessId,              // 🔥 NEW: Business context
+            industry: businessContext.industry,                  // 🔥 NEW: Industry context
+            companyName: businessContext.companyName,            // 🔥 NEW: Company context
             followUpPrompt: "I'm listening..."
         });
 
-        context.log("✅ Generated enhanced greeting with Alloy Turbo voice");
+        context.log(`✅ Generated ${businessContext.industry} greeting for ${businessContext.companyName}`);
 
         context.res = {
             headers: { "Content-Type": "text/xml" },
@@ -30,11 +49,11 @@ module.exports = async function (context, req) {
         };
         
     } catch (error) {
-        context.log.error("❌ Error generating enhanced TwiML:", error);
+        context.log.error("❌ Error generating multi-tenant TwiML:", error);
         
-        // Create error response using voice manager
+        // Fallback to default error response
         const errorResponse = voiceManager.createErrorResponse(
-            "Thank you for calling Blue Caller HVAC. I'm having some technical difficulties right now. Please try calling back in just a moment."
+            "Thank you for calling. I'm having some technical difficulties right now. Please try calling back in just a moment."
         );
         
         context.res = {

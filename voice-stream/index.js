@@ -1,6 +1,8 @@
 const { AzureOpenAI } = require("openai");
 const { CosmosClient } = require("@azure/cosmos");
 const VoiceManager = require("../shared/voiceManager");
+const BusinessService = require("../shared/businessService");
+const MultiTenantCosmosDB = require("../shared/multiTenantCosmosDB");
 
 // Initialize Azure OpenAI with defensive error handling
 let openai = null;
@@ -29,6 +31,12 @@ const conversationSessions = new Map();
 
 // Initialize Voice Manager for Azure Speech Services
 const voiceManager = new VoiceManager();
+
+// Initialize Business Service for Multi-Tenant Support
+const businessService = new BusinessService();
+
+// Multi-tenant Cosmos DB wrapper
+let multiTenantDB = null;
 
 // Initialize Cosmos DB SQL API connection with enhanced error handling
 const initializeCosmosDB = async (context) => {
@@ -78,8 +86,11 @@ const initializeCosmosDB = async (context) => {
     
     await Promise.race([connectPromise, connectionTimeout]);
     
+    // 🔥 NEW: Initialize multi-tenant database wrapper
+    multiTenantDB = new MultiTenantCosmosDB(cosmosClient);
+    
     isDbConnected = true;
-    context.log('Successfully connected to Cosmos DB SQL API');
+    context.log('✅ Connected to Cosmos DB SQL API with multi-tenant support');
     return true;
   } catch (error) {
     context.log.error('Failed to connect to Cosmos DB:', error.message);
@@ -94,8 +105,8 @@ const initializeCosmosDB = async (context) => {
   }
 };
 
-// Helper function to get or create conversation session
-const getOrCreateSession = async (callSid, phoneNumber, context) => {
+// Helper function to get or create conversation session with business context
+const getOrCreateSession = async (callSid, phoneNumber, context, businessContext = null) => {
   if (isDbConnected) {
     try {
       // Get existing conversation from this call
@@ -118,23 +129,40 @@ const getOrCreateSession = async (callSid, phoneNumber, context) => {
         .query(historyQuery)
         .fetchAll();
       
+      // 🔥 NEW: Generate business-specific system prompt
+      const systemPrompt = businessContext ? 
+        businessService.generateSystemPrompt(businessContext) :
+        `You are a friendly customer service agent for Blue Caller HVAC. Have natural conversations and be genuinely helpful.
+
+PRIMARY GOALS:
+- Help with heating, cooling, and home comfort questions
+- Understand what the customer needs
+- Get contact information naturally during conversation
+- Handle emergencies with immediate assistance
+
+CONVERSATION STYLE:
+- Be warm, conversational, and relatable
+- Listen carefully and respond to what they actually say
+- Keep responses SHORT (1-2 sentences) but natural
+- Ask helpful follow-up questions
+- It's OK to have brief small talk or acknowledge their situation
+
+HANDLE EVERYTHING:
+- HVAC issues (heating, cooling, repairs, maintenance)
+- General questions about our services
+- Scheduling and appointments
+- Pricing and estimates
+- Emergency situations (no heat/AC, gas smell, urgent repairs)
+
+BE FLEXIBLE: If they mention something not directly HVAC-related but you can help connect it to home comfort, do so naturally.`;
+
+      // Add returning customer context
+      const finalSystemPrompt = systemPrompt + (previousCalls.length > 0 ? `\n\nReturning customer (${previousCalls.length} previous calls)` : '');
+
       // Build conversation context
       let messages = [{
         role: "system",
-        content: `You are an HVAC service representative for Blue Caller HVAC. Be conversational and helpful.
-
-GOALS:
-- Help with heating/cooling questions
-- Get contact info naturally 
-- Identify service needs
-- Handle emergencies urgently
-
-RESPONSE STYLE:
-- Keep responses SHORT (1-2 sentences max)
-- Be natural and friendly
-- Ask ONE follow-up question max
-
-EMERGENCIES: no heat, no AC, gas smell - offer immediate help${previousCalls.length > 0 ? `\n\nReturning customer (${previousCalls.length} previous calls)` : ''}`
+        content: finalSystemPrompt
       }];
       
       // Add existing messages from this call
@@ -186,18 +214,29 @@ EMERGENCIES: no heat, no AC, gas smell - offer immediate help${previousCalls.len
     conversationSessions.set(callSid, {
       messages: [{
         role: "system",
-        content: `You are an HVAC service representative for Blue Caller HVAC. Be conversational and helpful.
+        content: `You are a friendly customer service agent for Blue Caller HVAC. Have natural conversations and be genuinely helpful.
 
-GOALS:
-- Help with heating/cooling questions
-- Get contact info naturally 
-- Identify service needs
-- Handle emergencies urgently
+PRIMARY GOALS:
+- Help with heating, cooling, and home comfort questions
+- Understand what the customer needs
+- Get contact information naturally during conversation
+- Handle emergencies with immediate assistance
 
-RESPONSE STYLE:
-- Keep responses SHORT (1-2 sentences max)
-- Be natural and friendly
-- Ask ONE follow-up question max`
+CONVERSATION STYLE:
+- Be warm, conversational, and relatable
+- Listen carefully and respond to what they actually say
+- Keep responses SHORT (1-2 sentences) but natural
+- Ask helpful follow-up questions
+- It's OK to have brief small talk or acknowledge their situation
+
+HANDLE EVERYTHING:
+- HVAC issues (heating, cooling, repairs, maintenance)
+- General questions about our services
+- Scheduling and appointments
+- Pricing and estimates
+- Emergency situations (no heat/AC, gas smell, urgent repairs)
+
+BE FLEXIBLE: If they mention something not directly HVAC-related but you can help connect it to home comfort, do so naturally.`
       }],
       leadInfo: {
         hasEmergency: false,
@@ -344,8 +383,9 @@ const getAIResponse = async (messages) => {
 };
 
 module.exports = async function (context, req) {
-  context.log("🎙️ VOICE-STREAM FUNCTION CALLED WITH ALLOY TURBO!");
+  context.log("🎙️ MULTI-TENANT VOICE-STREAM WITH BUSINESS CONTEXT!");
   context.log("🔍 Voice-stream debug - VoiceManager exists:", !!voiceManager);
+  context.log("🔍 Business service initialized:", !!businessService);
   
   // Early validation of critical dependencies
   if (!process.env.OPENAI_ENDPOINT || !process.env.OPENAI_KEY) {
@@ -378,12 +418,12 @@ module.exports = async function (context, req) {
       context.log("Speech Result:", speechResult);
       context.log("Confidence:", confidence);
       
-      // Filter low-confidence results with enhanced voice response
-      if (confidence < 0.3 && speechResult && speechResult.trim().length < 3) {
-        context.log(`⚠️ Low confidence (${confidence}), requesting clarification with enhanced voice`);
+      // Filter only extremely low-confidence results  
+      if (confidence < 0.1 || (!speechResult || speechResult.trim().length < 1)) {
+        context.log(`⚠️ Very low confidence (${confidence}) or empty speech, requesting clarification`);
         
         const clarificationResponse = await voiceManager.generateVoiceResponse(
-          "Sorry, I didn't catch that clearly. Could you please repeat what you said?",
+          "I did not catch that. Could you please repeat?",
           { 
             emotion: 'helpful',
             urgencyLevel: 'normal',
@@ -399,8 +439,14 @@ module.exports = async function (context, req) {
       }
       
       if (speechResult && speechResult.trim().length > 0) {
-        // Get or create session
-        const session = await getOrCreateSession(callSid, phoneNumber, context);
+        // 🔥 NEW: Get business context for this call
+        const twilioPhoneNumber = formData.To; // The business number that was called
+        const businessContext = await businessService.getBusinessContext(null, twilioPhoneNumber);
+        
+        context.log(`🏢 Business context: ${businessContext.companyName} (${businessContext.industry})`);
+        
+        // Get or create session with business context
+        const session = await getOrCreateSession(callSid, phoneNumber, context, businessContext);
         
         // Add user message
         session.messages.push({
@@ -411,22 +457,27 @@ module.exports = async function (context, req) {
         // Save user message (non-blocking)
         saveMessage(callSid, phoneNumber, 'user', speechResult, context);
         
-        // Analyze message
-        const analysis = analyzeMessage(speechResult);
+        // 🔥 NEW: Business-specific emergency analysis
+        const analysis = businessContext ? 
+          businessService.analyzeEmergency(speechResult, businessContext) :
+          analyzeMessage(speechResult);
         
         // Update lead info
         if (analysis.hasEmergency) session.leadInfo.hasEmergency = true;
         if (analysis.serviceType) session.leadInfo.serviceType = analysis.serviceType;
         if (analysis.urgencyLevel) session.leadInfo.urgencyLevel = analysis.urgencyLevel;
-        if (analysis.contactInfo.name) session.leadInfo.contactInfo.name = analysis.contactInfo.name;
+        if (analysis.contactInfo && analysis.contactInfo.name) session.leadInfo.contactInfo.name = analysis.contactInfo.name;
         
         session.leadInfo.qualificationScore = calculateLeadScore(session.leadInfo);
         
-        // Get AI response
+        // Get AI response with timing
+        const aiStart = Date.now();
         const aiResponse = await getAIResponse(session.messages);
+        const aiEnd = Date.now();
         context.log("🤖 AI Response:", aiResponse);
         context.log("🔍 AI Response length:", aiResponse.length);
         context.log("🔍 AI Response first 100 chars:", aiResponse.substring(0, 100));
+        context.log(`⏱️ AI Generation Time: ${aiEnd - aiStart}ms`);
         
         // Add AI response to session
         session.messages.push({
@@ -444,12 +495,19 @@ module.exports = async function (context, req) {
         // Generate contextual follow-up prompt
         const followUpPrompt = voiceManager.generateContextualFollowUp(session);
         
-        // Generate enhanced voice response with context awareness
+        // Generate enhanced voice response with context awareness and timing
+        const voiceStart = Date.now();
         const responseTwiml = await voiceManager.generateVoiceResponse(aiResponse, {
           ...voiceContext,
+          businessId: businessContext?.businessId,              // 🔥 NEW: Business context
+          industry: businessContext?.industry,                  // 🔥 NEW: Industry context  
+          companyName: businessContext?.companyName,            // 🔥 NEW: Company context
           customerName: session.leadInfo?.contactInfo?.name,
           followUpPrompt: followUpPrompt
         });
+        const voiceEnd = Date.now();
+        context.log(`⏱️ Voice Synthesis + Upload Time: ${voiceEnd - voiceStart}ms`);
+        context.log(`⏱️ Total Response Time: ${voiceEnd - aiStart}ms`);
         
         context.res = {
           headers: { "Content-Type": "text/xml" },
