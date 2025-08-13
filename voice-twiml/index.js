@@ -14,7 +14,7 @@ module.exports = async function (context, req) {
         // TODO: In future, we could check database for returning customer info
         // For now, always treat as new customer with professional greeting
         
-        const greeting = "Hello! Thank you for calling Blue Caller HVAC. I'm Sarah, your AI assistant. How can I help you today?";
+        const greeting = "Thank you for calling Blue Caller HVAC. How may I assist you today?";
         
         const voiceResponse = await voiceManager.generateVoiceResponse(greeting, {
             emotion: 'friendly',

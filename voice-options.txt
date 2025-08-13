@@ -1,0 +1,17 @@
+Based on your Speech Playground, here are the voice options:
+
+MULTILINGUAL VOICES (from your playground):
+✅ en-US-BrandonMultilingualNeural (male, shown in code sample)
+✅ en-US-AvaMultilingualNeural (female, highlighted in gallery)  
+✅ en-US-AndrewMultilingualNeural (male, visible in gallery)
+✅ en-US-NovaMultilingualNeural (female, visible in gallery)
+
+RECOMMENDED: Try Ava first since she was highlighted:
+- Change to: 'en-US-AvaMultilingualNeural'
+- Female voice, bright and engaging
+- Multilingual capabilities
+
+Your Environment Variables Need:
+- SPEECH_KEY: [from your Resource key field]
+- SPEECH_REGION: eastus2  
+- SPEECH_ENDPOINT: https://ai-raythmediarepo1560ai970886511821.cognitiveservices.azure.com/

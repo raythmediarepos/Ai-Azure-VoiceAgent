@@ -424,7 +424,9 @@ module.exports = async function (context, req) {
         
         // Get AI response
         const aiResponse = await getAIResponse(session.messages);
-        context.log("AI Response:", aiResponse);
+        context.log("🤖 AI Response:", aiResponse);
+        context.log("🔍 AI Response length:", aiResponse.length);
+        context.log("🔍 AI Response first 100 chars:", aiResponse.substring(0, 100));
         
         // Add AI response to session
         session.messages.push({

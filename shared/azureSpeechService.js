@@ -21,8 +21,9 @@ class AzureSpeechService {
                 process.env.SPEECH_REGION
             );
 
-            // Set the Alloy Turbo multilingual voice - the most natural voice available
-            this.speechConfig.speechSynthesisVoiceName = 'en-US-AlloyMultilingualNeural';
+            // TRY ENHANCED VOICES: These should work in your current westus region
+            // Start with Jenny - Microsoft's most conversational female voice
+            this.speechConfig.speechSynthesisVoiceName = 'en-US-JennyNeural';
             
             // Configure optimized audio output for better Twilio streaming
             this.speechConfig.speechSynthesisOutputFormat = sdk.SpeechSynthesisOutputFormat.Audio24Khz96KBitRateMonoMp3;
@@ -51,7 +52,7 @@ class AzureSpeechService {
                 console.log('All env vars:', Object.keys(process.env).filter(k => k.includes('STORAGE')));
             }
 
-            console.log('✅ Azure Speech Service initialized with Alloy Turbo voice');
+            console.log('✅ Azure Speech Service initialized with Jenny Neural voice (conversational)');
         } catch (error) {
             console.error('❌ Failed to initialize Azure Speech Service:', error);
         }
@@ -64,7 +65,7 @@ class AzureSpeechService {
                 return { success: false, error: 'Speech service not initialized' };
             }
 
-            console.log(`🎤 Synthesizing speech with Alloy Turbo: "${text.substring(0, 50)}..."`);
+            console.log(`🎤 Synthesizing speech with Jenny Neural: "${text.substring(0, 50)}..."`);
 
             // Create enhanced SSML for natural speech
             const ssml = this.createSSML(text, options);
@@ -141,13 +142,13 @@ class AzureSpeechService {
         // Clean text for SSML and add natural pauses
         const cleanText = this.cleanTextForSSML(text);
 
-        // Create simplified SSML optimized for consistent playback
+        // Create optimized SSML for AriaNeural - smooth, natural conversation
         const ssml = `
             <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" 
                    xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="en-US">
-                <voice name="en-US-AlloyTurboMultilingualNeural">
-                    <mstts:express-as style="chat" styledegree="1.0">
-                        <prosody rate="${adjustedRate}">
+                <voice name="en-US-JennyNeural">
+                    <mstts:express-as style="friendly" styledegree="1.0">
+                        <prosody rate="medium" pitch="default">
                             ${cleanText}
                         </prosody>
                     </mstts:express-as>
@@ -203,10 +204,10 @@ class AzureSpeechService {
         }
 
         try {
-            const containerName = 'alloy-turbo-audio';
-            const textHash = require('crypto').createHash('md5').update(text).digest('hex');
+            const containerName = 'jenny-neural-audio';
+            const textHash = require('crypto').createHash('md5').update(`jenny-2025-${text}-${Date.now()}`).digest('hex');
             const timestamp = Date.now();
-            const blobName = `alloy-turbo-${textHash}-${timestamp}.mp3`;
+            const blobName = `jenny-neural-${textHash}-${timestamp}.mp3`;
             
             const containerClient = this.blobService.getContainerClient(containerName);
             
@@ -225,7 +226,7 @@ class AzureSpeechService {
                     }
                 });
 
-            console.log(`✅ Alloy Turbo audio cached successfully: ${blobName}`);
+            console.log(`✅ Jenny Neural audio cached successfully: ${blobName}`);
             console.log(`🔗 Public URL: ${blockBlobClient.url}`);
             return blockBlobClient.url;
         } catch (error) {

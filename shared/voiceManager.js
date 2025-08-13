@@ -13,8 +13,8 @@ class VoiceManager {
     }
 
     async generateVoiceResponse(text, context = {}) {
-        console.log(`🎙️ Generating ALLOY TURBO voice response for: "${text.substring(0, 50)}..."`);
-        
+                console.log(`🎙️ Generating JENNY NEURAL voice response for: "${text.substring(0, 50)}..."`);
+
         const {
             isEmergency = false,
             customerName = null,
@@ -24,8 +24,8 @@ class VoiceManager {
         } = context;
 
         try {
-            // ONLY use Azure Speech Services with Alloy Turbo - NO FALLBACKS
-            console.log('🎤 Synthesizing with Azure Alloy Turbo (All-or-Nothing mode)');
+            // ONLY use Azure Speech Services with Jenny Neural - NO FALLBACKS
+            console.log('🎤 Synthesizing with Azure Jenny Neural (All-or-Nothing mode)');
             
             const azureResult = await this.azureSpeech.synthesizeSpeech(text, {
                 isEmergency,
@@ -35,7 +35,7 @@ class VoiceManager {
             });
 
             if (azureResult.success) {
-                console.log('✅ Azure Alloy Turbo synthesis successful');
+                console.log('✅ Azure Jenny Neural synthesis successful');
                 
                 // Upload main audio to blob storage and get URL
                 const audioUrl = await this.azureSpeech.cacheAudio(text, azureResult.audioData);
@@ -55,7 +55,7 @@ class VoiceManager {
             }
 
         } catch (error) {
-            console.error('❌ ALLOY TURBO FAILED:', error.message);
+            console.error('❌ PHOEBE MULTILINGUAL FAILED:', error.message);
             throw error; // Re-throw to cause function failure - no fallbacks!
         }
     }
@@ -63,8 +63,8 @@ class VoiceManager {
     createAlloyTurboTwiML(audioUrl, followUpUrl, context = {}) {
         const { isEmergency = false } = context;
         
-        // Use the actual Azure Alloy Turbo audio URLs from blob storage
-        console.log('🎵 Creating TwiML with Alloy Turbo audio URLs');
+        // Use the actual Azure Jenny Neural audio URLs from blob storage
+        console.log('🎵 Creating TwiML with Jenny Neural audio URLs');
         console.log('Main audio:', audioUrl.substring(0, 50) + '...');
         if (followUpUrl) console.log('Follow-up audio:', followUpUrl.substring(0, 50) + '...');
         
@@ -79,7 +79,8 @@ class VoiceManager {
                         action="${this.baseUrl}/voice-stream" 
                         method="POST">
                 </Gather>
-                <Redirect>${this.baseUrl}/voice-twiml</Redirect>
+                <Say voice="alice">Thank you for calling Blue Caller HVAC. Have a great day!</Say>
+                <Hangup/>
             </Response>
         `.trim();
     }
